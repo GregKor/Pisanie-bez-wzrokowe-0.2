@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Słówka z klawiatury</title>
 <meta name="theme-color" content="#2b4eff">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
+<title>Słówka z klawiatury</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;700&family=JetBrains+Mono:wght@500&display=swap">
 <style>
 :root{--bg:#e8ecf4;--card:#fff;--ink:#14213d;--mute:#6b7691;--line:#cdd5e6;--acc:#2b4eff;--accfg:#fff;--ok:#1f8a5b;--bad:#c23b4a;--ghost:#9aa5c2;
@@ -76,9 +76,10 @@ dialog{background:var(--card);color:var(--ink);border:1px solid var(--line);bord
 <div class="row" style="margin:0 0 12px;justify-content:space-between"><h2 style="margin:0">Własne teksty</h2><span class="acts"><button id="lvls">Poziomy</button><button class="primary" id="add">+ Dodaj tekst</button></span></div>
 <div class="line head"><span>tytuł</span><span class="num">postęp</span><span class="num">poziom</span><span class="num">słowa/min</span><span class="num">dokł.</span><span></span><span></span></div>
 <div id="items"></div>
-<div class="row"><button id="exp">Eksportuj teksty</button><button id="imp">Importuj teksty</button><input type="file" id="impf" accept=".json" hidden></div>
 <label class="chk"><input type="checkbox" id="voice"> Odtwarzaj wymowę słówka obcego przed jego wpisaniem</label>
 <label class="chk"><input type="checkbox" id="dia"> Pomijaj hiszpańskie akcenty (á→a, é→e, ñ→n); polskie znaki piszesz normalnie</label>
+<label class="chk"><input type="checkbox" id="ign"> Ignoruj błędnie wpisane litery (zła litera jest przyjmowana, kursor idzie dalej, błąd nie jest liczony)</label>
+<div class="row"><button id="exp">Eksportuj teksty</button><button id="imp">Importuj teksty</button><input type="file" id="impf" accept=".json" hidden></div>
 </div>
 <div class="panel" id="editor" hidden>
 <h2 id="edTitle">Nowy tekst</h2>
@@ -115,7 +116,7 @@ function lvl(w){var i=Math.min(9,Math.floor(w/10));return{i:i,n:LV[i][0],e:LV[i]
 function part(t){return t.ms>10000&&t.ok>=15?{w:Math.round(t.ok/5/(t.ms/60000)),a:Math.round(t.ok/(t.ok+t.err)*100),d:t.seen||0}:false}
 
 /* lista */
-function render(){var box=$("items");box.innerHTML="";$("dia").checked=D.dia;
+function render(){var box=$("items");box.innerHTML="";$("dia").checked=D.dia;$("ign").checked=!!D.ign;
 D.texts.slice().sort(function(a,b){return b.upd-a.upd}).forEach(function(t,i){
 var len=t.text.length,pct=t.done?100:Math.floor(t.pos/len*100),h=(!t.done&&t.pos>0&&part(t))||t.hist[t.hist.length-1];
 var el=document.createElement("div");el.className="item";
@@ -139,13 +140,14 @@ var best=t.hist.reduce(function(m,x){return Math.max(m,x.w)},0),mx=Math.max(best
 det.innerHTML=t.hist.length?"<div class=hist>"+t.hist.map(function(x){return"<i title='"+new Date(x.d).toLocaleDateString("pl")+" · "+x.a+"%' style='height:"+Math.max(5,x.w/mx*52)+"px'><b>"+x.w+"</b></i>"}).join("")+"</div><div class=msg>Prędkość (słowa/min) w kolejnych podejściach. Rekord: "+best+".</div>":"<div class=msg>Brak ukończonych podejść – wykres pojawi się po pierwszym przepisaniu całego tekstu.</div>";
 el.append(ln,det);box.appendChild(el)})}
 $("dia").onchange=function(){D.dia=this.checked;save()};
+$("ign").onchange=function(){D.ign=this.checked;save()};
 function edit(t){editing=t||null;$("editor").hidden=false;$("edTitle").textContent=t?"Edytuj tekst":"Nowy tekst";$("name").value=t?t.title:"";$("body").value=t?(t.raw||t.text):"";$("lang").value=(t&&t.lang)||"en";$("del").hidden=!t;$("emsg").textContent="";$("name").focus();$("editor").scrollIntoView({behavior:"smooth"})}
 $("add").onclick=function(){edit(null)};$("cancel").onclick=function(){$("editor").hidden=true};
 $("save").onclick=function(){var s=$("body").value.replace(/\r/g,"");
 var segs=[],altm=false,SP=/[ \t]*(?:[–—=;]|\s-\s)[ \t]*/;
 if($("sep").checked){var cl=function(x){return x.replace(/[¿¡]/g,"").replace(/[’‘]/g,"'").replace(/[“”]/g,'"').replace(/\s+/g," ").trim()};
 var ls=s.split("\n").filter(function(l){return l.trim()}),pr=[],okk=ls.length>=3;
-ls.forEach(function(l){var m=l.split(SP),f,p;if(m.length>=2){f=cl(m[0]);p=cl(m.slice(1).join(" "))}else{var w=cl(l);if(w.split(" ").length>8)okk=false;f=w.split(" ")[0];p=w.split(" ").slice(1).join(" ")}pr.push([f,p])});
+ls.forEach(function(l){var m=l.split(SP);if(m.length>=3){chainPairs(m.map(cl)).forEach(function(q){pr.push(q)});return}var f,p;if(m.length>=2){f=cl(m[0]);p=cl(m.slice(1).join(" "))}else{var w=cl(l);if(w.split(" ").length>8)okk=false;f=w.split(" ")[0];p=w.split(" ").slice(1).join(" ")}pr.push([f,p])});
 if(ls.some(function(l){return SP.test(l)})||okk){var out="";pr.forEach(function(q){if(!q[0])return;if(out)out+=" ";var a=out.length;out+=q[0];segs.push([a,out.length]);if(q[1])out+=" "+q[1]});s=out}else{s=s.replace(/[ \t]*(?:[–—=;]|\s-\s)[ \t]*/g," ").replace(/[¿¡]/g,"").replace(/[’‘]/g,"'").replace(/\s+/g," ").trim();segs=altSegs(s);altm=true}}
 s=s.replace(/[¿¡]/g,"").replace(/[’‘]/g,"'").replace(/[“”]/g,'"').replace(/\s+/g," ").trim();
 if(!s){$("emsg").textContent="Wklej najpierw jakiś tekst.";return}
@@ -160,7 +162,7 @@ function openText(t,fresh){cur=t;if(fresh||t.done){t.pos=0;t.ms=0;t.ok=0;t.err=0
 $("listView").hidden=true;$("play").hidden=false;$("result").hidden=true;$("card").hidden=false;kbShow();
 var box=$("txt");box.innerHTML="<div class=strip id=strip></div>";var strip=$("strip");spans=[];prevCur=-1;
 for(var i=0;i<t.text.length;i++){var c=document.createElement("span");c.textContent=t.text[i];if(i<t.pos)c.className="ok";strip.appendChild(c);spans.push(c)}
-started=false;paused=false;if(t.altm||!t.raw)t.segs=altSegs(t.text);$("vrep").hidden=!(t.segs&&t.segs.length);vl();strip.style.transition="none";caret();strip.offsetWidth;strip.style.transition="";stats();focus()}
+started=false;paused=false;if(t.altm||!t.raw)t.segs=altSegs(t.text);else{var pz=parseRaw(t.raw);if(pz&&pz.s===t.text)t.segs=pz.segs}$("vrep").hidden=!(t.segs&&t.segs.length);vl();strip.style.transition="none";caret();strip.offsetWidth;strip.style.transition="";stats();focus()}
 function focus(){paused=false;started=false;$("hint").textContent="";$("inp").focus()}
 function caret(){if(prevCur>=0&&spans[prevCur])spans[prevCur].classList.remove("cur");
 var s=spans[cur.pos];if(s){s.classList.add("cur");prevCur=cur.pos;var b=$("txt");$("strip").style.transform="translateX("+(b.clientWidth*0.35-s.offsetLeft)+"px)";var sg=quiet?null:segAt(cur.pos);if(sg)speak(cur.text.slice(sg[0],sg[1]));paintKb()}}
@@ -170,6 +172,7 @@ $("prog").textContent=spaces+" z "+words(t.text)+" słów";$("fill").style.width
 function press(ch){if(paused||cur.done)return;var now=Date.now();if(started)cur.ms+=Math.min(now-last,3000);started=true;last=now;
 var t=cur,exp=t.text[t.pos];
 if(norm(ch)===norm(exp)){t.ok++;spans[t.pos].className="ok";t.pos++;if(t.pos>=t.text.length){finish();return}caret()}
+else if(D.ign){spans[t.pos].className="ok";t.pos++;if(t.pos>=t.text.length){finish();return}caret()}
 else{t.err++;spans[t.pos].classList.add("bad");setTimeout(function(){if(spans[t.pos])spans[t.pos].classList.remove("bad")},220)}
 t.seen=now;stats();if(now-lastSave>3000){lastSave=now;save()}}
 $("inp").addEventListener("input",function(){var v=this.value;this.value="";for(var i=0;i<v.length;i++)press(v[i])});
@@ -181,7 +184,7 @@ $("back").onclick=leave;
 $("restart").onclick=function(){openText(cur,true)};
 $("again").onclick=function(){openText(cur,true)};
 document.addEventListener("keydown",function(e){if(e.key==="Escape"&&!$("play").hidden)leave()});
-function finish(){var t=cur,m=t.ms/60000,w=m>0?Math.round(t.ok/5/m):0,a=Math.round(t.ok/(t.ok+t.err)*100);
+function finish(){var t=cur,m=t.ms/60000,w=m>0?Math.round(t.ok/5/m):0,a=(t.ok+t.err)?Math.round(t.ok/(t.ok+t.err)*100):100;
 t.done=true;t.hist.push({d:Date.now(),w:w,a:a});if(t.hist.length>30)t.hist.shift();save();stats();
 $("card").hidden=true;$("kbw").hidden=true;$("result").hidden=false;$("rW").textContent=w;$("rA").textContent=a+"%";$("rT").textContent=Math.round(t.ms/1000);var L=lvl(w),pv=t.hist.length>1?lvl(t.hist[t.hist.length-2].w).i:null;$("rL").textContent="Poziom: "+L.e+" "+L.n+" ("+L.g+")"+(pv!==null&&L.i>pv?" – awans!":"")}
 $("lvls").onclick=function(){var all=[];D.texts.forEach(function(t){all=all.concat(t.hist);var q=!t.done&&t.pos>0&&part(t);if(q)all.push(q)});all.sort(function(a,b){return a.d-b.d});var r=all.slice(-5),me=r.length?Math.round(r.reduce(function(s,x){return s+x.w},0)/r.length):null,my=me===null?-1:lvl(me).i;
@@ -202,6 +205,14 @@ function replay(){var s=cur.segs||[],r=null;for(var i=0;i<s.length;i++)if(s[i][0
 function vUI(){$("voice").checked=!!D.voice;$("vtog").textContent=D.voice?"🔊 Głos: wł.":"🔇 Głos: wył."}
 $("voice").onchange=function(){D.voice=this.checked;save();vUI()};
 $("vtog").onclick=function(){D.voice=!D.voice;save();vUI();if(!D.voice&&window.speechSynthesis)speechSynthesis.cancel();$("inp").focus()};
+function chainPairs(c){var o=[],f=c[0];for(var i=1;i<c.length;i++){var w=c[i].split(" ");if(i===c.length-1){o.push([f,c[i]]);break}
+var n=1;if(w.length>=3&&ART2[w[w.length-2].toLowerCase()])n=2;
+if(w.length<=n){o.push([f,c[i]]);f="";continue}
+o.push([f,w.slice(0,w.length-n).join(" ")]);f=w.slice(w.length-n).join(" ")}return o}
+function parseRaw(raw){var s=raw.replace(/\r/g,""),segs=[],SP=/[ \t]*(?:[–—=;]|\s-\s)[ \t]*/,cl=function(x){return x.replace(/[¿¡]/g,"").replace(/[’‘]/g,"'").replace(/[“”]/g,'"').replace(/\s+/g," ").trim()},ls=s.split("\n").filter(function(l){return l.trim()}),pr=[],okk=ls.length>=3;
+ls.forEach(function(l){var m=l.split(SP);if(m.length>=3){chainPairs(m.map(cl)).forEach(function(q){pr.push(q)});return}var f,p;if(m.length>=2){f=cl(m[0]);p=cl(m.slice(1).join(" "))}else{var w=cl(l);if(w.split(" ").length>8)okk=false;f=w.split(" ")[0];p=w.split(" ").slice(1).join(" ")}pr.push([f,p])});
+if(!(ls.some(function(l){return SP.test(l)})||okk))return null;
+var out="";pr.forEach(function(q){if(!q[0])return;if(out)out+=" ";var a=out.length;out+=q[0];segs.push([a,out.length]);if(q[1])out+=" "+q[1]});return{s:out.replace(/\s+/g," ").trim(),segs:segs}}
 var ARTS={un:1,una:1,unos:1,unas:1,el:1,la:1,los:1,las:1,lo:1,a:1,an:1,the:1,to:1},ART2={un:1,una:1,unos:1,unas:1,el:1,la:1,los:1,las:1,the:1,an:1},PLX=/[ąćęłńśźż]/i,ESX=/[áéíúñüÁÉÍÚÑÜ]/;
 function altSegs(s){var w=s.split(" "),P=[],i=0,r=[],st="f",k,n=w.length;w.forEach(function(x){P.push(i);i+=x.length+1});
 for(k=0;k<n;k++){var x=w[k],lx=x.toLowerCase();
